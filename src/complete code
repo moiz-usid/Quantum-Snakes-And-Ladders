@@ -1,0 +1,333 @@
+import pygame
+import random
+import sys
+import time
+
+# Configuration
+class Config:
+    def __init__(self):
+        self.board_size = 10
+        self.screen_width = 600
+        self.screen_height = 600
+        self.fps = 30
+        print("Config initialized: 10x10 board, 600x600 window, 30 FPS")
+
+# Board
+class Board:
+    def __init__(self, config):
+        self.size = config.board_size
+        self.snakes = {16: 6, 47: 26, 49: 11}
+        self.ladders = {3: 38, 8: 28, 20: 42}
+        self.powerup_positions = [10, 30, 50]
+        print(f"Board initialized with snakes: {self.snakes}, ladders: {self.ladders}, power-ups at: {self.powerup_positions}")
+    
+    def is_snake(self, position):
+        return position in self.snakes
+    
+    def is_ladder(self, position):
+        return position in self.ladders
+    
+    def has_powerup(self, position):
+        return position in self.powerup_positions
+    
+    def get_new_position(self, position):
+        if self.is_snake(position):
+            return self.snakes[position]
+        elif self.is_ladder(position):
+            return self.ladders[position]
+        return position
+
+# Player
+class Player:
+    def __init__(self, id, name, is_ai=False):
+        self.id = id
+        self.name = name
+        self.is_ai = is_ai
+        self.position = 1
+        self.powerups = []
+        self.moves = 0
+        print(f"Player {self.name} (ID: {self.id}, AI: {self.is_ai}) initialized at position 1")
+
+# Power-up
+class PowerUp:
+    @staticmethod
+    def apply(powerup_type, game_rules, player):
+        if powerup_type == "Reroll":
+            roll = random.randint(1, 6)
+            print(f"Applied Reroll for {player.name}: New roll = {roll}")
+            return roll
+        return None
+
+# Heuristics
+def evaluate_board(board, players, player_id):
+    player = next(p for p in players if p.id == player_id)
+    opponent = next(p for p in players if p.id != player_id)
+    player_distance = 100 - player.position
+    opponent_distance = 100 - opponent.position
+    powerup_score = 10 if player.powerups else 0
+    snake_penalty = -20 if board.is_snake(player.position) else 0
+    ladder_bonus = 20 if board.is_ladder(player.position) else 0
+    score = player_distance - opponent_distance + powerup_score + snake_penalty + ladder_bonus
+    return score
+
+# Minimax AI
+class MinimaxAI:
+    def __init__(self, game_rules, config):
+        self.game_rules = game_rules
+        self.config = config
+        self.max_depth = 1
+        print("Minimax AI initialized with depth 1")
+    
+    def get_best_move(self, player):
+        start_time = time.time()
+        print(f"AI calculating move for {player.name}")
+        best_value = float('-inf')
+        best_move = None
+        possible_moves = self.game_rules.get_possible_moves(player)
+        for move in possible_moves:
+            self.game_rules.make_move(move, simulate=True)
+            value = self.minimax(self.max_depth, False, float('-inf'), float('inf'), player.id)
+            self.game_rules.undo_move()
+            if value > best_value:
+                best_value = value
+                best_move = move
+        move = best_move or random.choice(possible_moves)
+        elapsed = time.time() - start_time
+        print(f"AI chose move: {move} (value: {best_value}, time: {elapsed:.3f}s)")
+        return move
+    
+    def minimax(self, depth, is_maximizing, alpha, beta, player_id):
+        if depth == 0 or self.game_rules.is_game_over():
+            return evaluate_board(self.game_rules.board, self.game_rules.players, player_id)
+        if is_maximizing:
+            max_eval = float('-inf')
+            for move in self.game_rules.get_possible_moves(self.game_rules.players[player_id - 1]):
+                self.game_rules.make_move(move, simulate=True)
+                eval = self.minimax(depth - 1, False, alpha, beta, player_id)
+                self.game_rules.undo_move()
+                max_eval = max(max_eval, eval)
+                alpha = max(alpha, eval)
+                if beta <= alpha:
+                    break
+            return max_eval
+        else:
+            min_eval = float('inf')
+            opponent = next(p for p in self.game_rules.players if p.id != player_id)  # Fixed
+            for move in self.game_rules.get_possible_moves(opponent):
+                self.game_rules.make_move(move, simulate=True)
+                eval = self.minimax(depth - 1, True, alpha, beta, player_id)
+                self.game_rules.undo_move()
+                min_eval = min(min_eval, eval)
+                beta = min(beta, eval)
+                if beta <= alpha:
+                    break
+            return min_eval
+
+# Game Rules
+class GameRules:
+    def __init__(self, board, players, config):
+        self.board = board
+        self.players = players
+        self.config = config
+        self.current_player = 0
+        self.move_history = []
+        print("Game rules initialized")
+    
+    def get_possible_moves(self, player):
+        moves = [f"roll_{i}" for i in range(1, 7)]
+        if player.powerups:
+            moves.extend(player.powerups)
+        return moves
+    
+    def make_move(self, move, simulate=False):
+        player = self.players[self.current_player]
+        player.moves += 1
+        if move.startswith("roll_"):
+            roll = int(move.split("_")[1])
+        elif move == "Reroll":
+            roll = PowerUp.apply(move, self, player)
+            if move in player.powerups and not simulate:
+                player.powerups.remove(move)
+        else:
+            roll = random.randint(1, 6)
+        new_position = min(player.position + roll, 100)
+        new_position = self.board.get_new_position(new_position)
+        player.position = new_position
+        if self.board.has_powerup(new_position) and len(player.powerups) < 1 and not simulate:
+            player.powerups.append("Reroll")
+            print(f"{player.name} collected Reroll power-up at position {new_position}")
+        if not simulate:
+            self.move_history.append((player.id, move, player.position))
+            self.current_player = (self.current_player + 1) % len(self.players)
+            print(f"Player {player.name} moved to {player.position} with {move} (roll: {roll})")
+        return roll
+    
+    def undo_move(self):
+        if self.move_history:
+            player_id, _, old_position = self.move_history.pop()
+            player = next(p for p in self.players if p.id == player_id)
+            player.position = old_position
+            player.moves -= 1
+            self.current_player = (self.current_player - 1) % len(self.players)
+    
+    def is_game_over(self):
+        return any(p.position == 100 for p in self.players)
+    
+    def get_winner(self):
+        winners = [p for p in self.players if p.position == 100]
+        if winners:
+            winner = min(winners, key=lambda p: p.moves)
+            print(f"Winner determined: {winner.name} with {winner.moves} moves")
+            return winner
+        return None
+
+# GUI
+class PygameGUI:
+    def __init__(self, config, board, players, game_rules):
+        self.config = config
+        self.board = board
+        self.players = players
+        self.game_rules = game_rules
+        try:
+            pygame.init()
+            self.screen = pygame.display.set_mode((config.screen_width, config.screen_height))
+            pygame.display.set_caption("Quantum Snakes & Ladders")
+            self.font = pygame.font.SysFont(None, 24)
+            self.cell_size = config.screen_width // config.board_size
+            print("Pygame GUI initialized successfully")
+        except Exception as e:
+            print(f"Error initializing Pygame: {e}")
+            sys.exit(1)
+    
+    def draw(self):
+        try:
+            self.screen.fill((255, 255, 255))
+            for row in range(self.config.board_size):
+                for col in range(self.config.board_size):
+                    pos = (col * self.cell_size, row * self.cell_size)
+                    pygame.draw.rect(self.screen, (0, 0, 0), (*pos, self.cell_size, self.cell_size), 1)
+                    cell_num = row * self.config.board_size + col + 1
+                    if cell_num <= 100:
+                        text = self.font.render(str(cell_num), True, (0, 0, 0))
+                        self.screen.blit(text, (pos[0] + 10, pos[1] + 10))
+            for head, tail in self.board.snakes.items():
+                head_pos = self.get_cell_pos(head)
+                tail_pos = self.get_cell_pos(tail)
+                pygame.draw.line(self.screen, (255, 0, 0), head_pos, tail_pos, 3)
+            for bottom, top in self.board.ladders.items():
+                bottom_pos = self.get_cell_pos(bottom)
+                top_pos = self.get_cell_pos(top)
+                pygame.draw.line(self.screen, (0, 255, 0), bottom_pos, top_pos, 3)
+            for pos in self.board.powerup_positions:
+                x, y = self.get_cell_pos(pos)
+                pygame.draw.polygon(self.screen, (0, 0, 255), [
+                    (x, y - 10), (x + 10, y + 10), (x - 10, y + 10)
+                ])
+            for player in self.players:
+                x, y = self.get_cell_pos(player.position)
+                color = (255, 0, 0) if player.id == 1 else (0, 0, 255)
+                pygame.draw.circle(self.screen, color, (x, y), 10)
+            current = self.players[self.game_rules.current_player]
+            status = f"Player {current.name}'s turn | Power-ups: {', '.join(current.powerups) or 'None'}"
+            text = self.font.render(status, True, (0, 0, 0))
+            self.screen.blit(text, (10, self.config.screen_height - 30))
+            if not current.is_ai:
+                moves = self.game_rules.get_possible_moves(current)
+                for i, move in enumerate(moves):
+                    button_x = 100 + i * 100
+                    button_y = self.config.screen_height - 60
+                    pygame.draw.rect(self.screen, (200, 200, 200), (button_x, button_y, 80, 40))
+                    text = self.font.render(move.replace("roll_", "Roll "), True, (0, 0, 0))
+                    self.screen.blit(text, (button_x + 10, button_y + 10))
+        except Exception as e:
+            print(f"Error during drawing: {e}")
+            sys.exit(1)
+    
+    def get_cell_pos(self, cell_num):
+        if cell_num > 100:
+            cell_num = 100
+        row = (cell_num - 1) // self.config.board_size
+        col = (cell_num - 1) % self.config.board_size
+        x = col * self.cell_size + self.cell_size // 2
+        y = row * self.cell_size + self.cell_size // 2
+        return x, y
+    
+    def handle_click(self, pos):
+        if self.game_rules.current_player == 0:
+            moves = self.game_rules.get_possible_moves(self.players[0])
+            button_y = self.config.screen_height - 60
+            for i, move in enumerate(moves):
+                button_x = 100 + i * 100
+                if button_x <= pos[0] <= button_x + 80 and button_y <= pos[1] <= button_y + 40:
+                    self.game_rules.make_move(move)
+                    print(f"Human chose move: {move}")
+                    break
+    
+    def display_winner(self):
+        winner = self.game_rules.get_winner()
+        if winner:
+            try:
+                text = self.font.render(f"{winner.name} wins!", True, (255, 0, 0))
+                self.screen.blit(text, (self.config.screen_width // 2 - 50, self.config.screen_height // 2))
+                pygame.display.flip()
+                print(f"Displaying winner: {winner.name}")
+            except Exception as e:
+                print(f"Error displaying winner: {e}")
+                sys.exit(1)
+
+# Main
+def main():
+    start_time = time.time()
+    print("Starting Quantum Snakes & Ladders...")
+    try:
+        pygame.init()
+        print(f"Pygame initialized in {time.time() - start_time:.3f}s")
+    except Exception as e:
+        print(f"Failed to initialize Pygame: {e}")
+        sys.exit(1)
+    
+    config = Config()
+    board = Board(config)
+    players = [
+        Player(1, "Human", is_ai=False),
+        Player(2, "AI", is_ai=True)
+    ]
+    game_rules = GameRules(board, players, config)
+    minimax_ai = MinimaxAI(game_rules, config)
+    try:
+        gui = PygameGUI(config, board, players, game_rules)
+        print(f"GUI setup completed in {time.time() - start_time:.3f}s")
+    except Exception as e:
+        print(f"Failed to create GUI: {e}")
+        sys.exit(1)
+    
+    clock = pygame.time.Clock()
+    running = True
+    print("Entering game loop")
+    while running and not game_rules.is_game_over():
+        try:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                    print("Game closed by user")
+                elif event.type == pygame.MOUSEBUTTONDOWN and not players[game_rules.current_player].is_ai:
+                    gui.handle_click(event.pos)
+            
+            if players[game_rules.current_player].is_ai and not game_rules.is_game_over():
+                move = minimax_ai.get_best_move(players[game_rules.current_player])
+                game_rules.make_move(move)
+            
+            gui.draw()
+            pygame.display.flip()
+            clock.tick(config.fps)
+        except Exception as e:
+            print(f"Error in game loop: {e}")
+            sys.exit(1)
+    
+    gui.display_winner()
+    pygame.time.wait(2000)
+    pygame.quit()
+    print(f"Game ended successfully after {time.time() - start_time:.3f}s")
+
+if __name__ == "__main__":
+    main()
