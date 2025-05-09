@@ -1,1 +1,103 @@
+Project Report: Quantum Snakes & Ladders with AI Integration
+1. Project Overview
+This project presents an enhanced version of the classic Snakes and Ladders game implemented using Python. The game features:
 
+A 10x10 board.
+
+Power-up mechanics.
+
+AI-powered opponent using the Minimax algorithm.
+
+Interactive GUI designed using Pygame.
+
+2. Key Features
+a. Board Design
+A 100-tile board implemented as a 10x10 grid.
+
+Predefined snakes, ladders, and power-up positions:
+
+Snakes: 16→6, 47→26, 49→11
+
+Ladders: 3→38, 8→28, 20→42
+
+Power-ups: Reroll at positions 10, 30, and 50
+
+b. Players
+Support for two players: either human vs human or human vs AI.
+
+Each player has:
+
+An ID, name, position on the board.
+
+A record of moves made.
+
+A list of collected power-ups.
+
+c. Power-Up System
+Introduced a "Reroll" power-up allowing the player to roll the die again.
+
+Limited to one power-up at a time.
+
+d. AI Integration
+Minimax AI with alpha-beta pruning for decision-making.
+
+Evaluates board state based on:
+
+Distance to finish.
+
+Power-up possession.
+
+Snake or ladder advantage/disadvantage.
+
+Depth-limited to 1 for real-time responsiveness.
+
+e. Game Mechanics
+Turn-based logic switching between players.
+
+Game ends when a player reaches tile 100.
+
+Winner decided based on reaching tile 100 with the fewest moves.
+
+f. Graphical User Interface
+Implemented using Pygame.
+
+Displays:
+
+Board with tile numbers.
+
+Snakes (red), ladders (green), and power-ups (blue).
+
+Players as colored circles.
+
+Action buttons for human players (e.g., "Roll 1", "Reroll").
+
+Status message showing the current player's turn and power-ups.
+
+3. Classes Breakdown
+Class	Description
+Config	Stores board size, screen dimensions, and FPS.
+Board	Manages snake/ladder mapping and power-up detection.
+Player	Represents a player entity with stats and states.
+PowerUp	Applies reroll logic.
+MinimaxAI	Computes best move using Minimax with alpha-beta pruning.
+GameRules	Core logic: move application, undoing moves, power-up collection.
+PygameGUI	Handles all graphical elements and rendering with Pygame.
+
+4. Challenges Faced
+Handling AI move decisions within GUI loop constraints.
+
+Maintaining synchronization between simulated and real moves.
+
+Designing a visually clear and scalable Pygame interface.
+
+5. Future Enhancements
+Increase Minimax depth and optimize performance.
+
+Add additional power-ups (e.g., teleport, swap).
+
+Introduce sound effects and animations.
+
+Implement a database or file-based score tracking system.
+
+6. Conclusion
+This project successfully merges traditional gameplay with modern AI and graphics. It offers a strategic, interactive, and visually engaging version of Snakes and Ladders suitable for both casual users and AI enthusiasts.
